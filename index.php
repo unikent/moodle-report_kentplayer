@@ -60,10 +60,44 @@ if ($role == $ar->id || $role == $nar->id) {
     list($wheresql, $params) = $DB->get_in_or_equal(array($ar->id, $nar->id), SQL_PARAMS_NAMED, 'roleid');
 }
 
-$data = $DB->get_records_sql("SELECT *
-	FROM {role_assignments} ra
-	INNER JOIN {user} u ON u.id=ra.userid
-	WHERE roleid $wheresql
-", $params, $page * $perpage, $perpage);
+$sql = <<<SQL
+	SELECT u.id, u.username, u.firstname, u.lastname, ra.roleid
+    FROM {role_assignments} ra
+    INNER JOIN {user} u ON u.id=ra.userid
+    WHERE roleid $wheresql
+    GROUP BY u.id
+SQL;
+
+$data = $DB->get_records_sql($sql, $params, $page * $perpage, $perpage);
+
+
+// Setup the table.
+$table = new html_table();
+$table->head  = array("Username", "First name", "Last Name", "Role");
+$table->colclasses = array('mdl-left username', 'mdl-left firstname', 'mdl-left lastname', 'mdl-left role');
+$table->attributes = array('class' => 'admintable kentplayerreport generaltable');
+$table->id = 'kentplayerreporttable';
+$table->data  = array();
+
+foreach ($data as $datum) {
+    $user = new \html_table_cell(\html_writer::tag('a', $datum->username, array(
+        'href' => $CFG->wwwroot . '/user/view.php?id=' . $datum->id,
+        'target' => '_blank'
+    )));
+
+    $table->data[] = array(
+        $user,
+        $datum->firstname,
+        $datum->lastname,
+        $datum->roleid == $ar->id ? 'Academic' : 'Non-Academic'
+    );
+}
+
+
+echo html_writer::table($table);
+
+$baseurl = new moodle_url('/report/kentplayer/index.php', array('page' => $page, 'perpage' => $perpage, 'role' => $role));
+$count = $DB->count_records_select('role_assignments', 'roleid ' . $wheresql, $params);
+echo $OUTPUT->paging_bar($count, $page, $perpage, $baseurl);
 
 echo $OUTPUT->footer();
