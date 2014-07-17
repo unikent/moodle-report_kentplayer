@@ -29,6 +29,7 @@ require_once($CFG->libdir . '/adminlib.php');
 $page     = optional_param('page', 0, PARAM_INT);
 $perpage  = optional_param('perpage', 25, PARAM_INT);
 $role = optional_param('role', 0, PARAM_INT);
+$format = optional_param('format', '', PARAM_ALPHA);
 
 admin_externalpage_setup('reportkentplayer');
 
@@ -38,17 +39,8 @@ $PAGE->requires->js_init_call('M.report_kentplayer.init', array(), false, array(
     'fullpath' => '/report/kentplayer/module.js'
 ));
 
-echo $OUTPUT->header();
-echo $OUTPUT->heading(get_string('pluginname', 'report_kentplayer'));
-
-// Allow restriction by role.
 $ar = \block_panopto\util::get_role('panopto_academic');
 $nar = \block_panopto\util::get_role('panopto_non_academic');
-echo html_writer::select(array(
-    0 => "All",
-    $ar->id => "Academic",
-    $nar->id => "Non-Academic"
-), 'role', $role);
 
 $wheresql = '';
 $params = array();
@@ -61,7 +53,7 @@ if ($role == $ar->id || $role == $nar->id) {
 }
 
 $sql = <<<SQL
-	SELECT u.id, u.username, u.firstname, u.lastname, ra.roleid
+    SELECT u.id, u.username, u.firstname, u.lastname, ra.roleid
     FROM {role_assignments} ra
     INNER JOIN {user} u ON u.id=ra.userid
     WHERE roleid $wheresql
@@ -69,7 +61,6 @@ $sql = <<<SQL
 SQL;
 
 $data = $DB->get_records_sql($sql, $params, $page * $perpage, $perpage);
-
 
 // Setup the table.
 $table = new html_table();
@@ -79,25 +70,61 @@ $table->attributes = array('class' => 'admintable kentplayerreport generaltable'
 $table->id = 'kentplayerreporttable';
 $table->data  = array();
 
+if ($format == 'csv') {
+    require_once($CFG->libdir . "/csvlib.class.php");
+
+    $export = new csv_export_writer();
+    $export->set_filename('PanoptoReport-');
+    $export->add_data($table->head);
+}
+
 foreach ($data as $datum) {
     $user = new \html_table_cell(\html_writer::tag('a', $datum->username, array(
         'href' => $CFG->wwwroot . '/user/view.php?id=' . $datum->id,
         'target' => '_blank'
     )));
 
-    $table->data[] = array(
+    $row = array(
         $user,
         $datum->firstname,
         $datum->lastname,
         $datum->roleid == $ar->id ? 'Academic' : 'Non-Academic'
     );
+    $table->data[] = $row;
+
+    if ($format == 'csv') {
+        $row[0] = $datum->username;
+        $export->add_data($row);
+    }
 }
 
+if ($format == 'csv') {
+    $export->download_file();
+}
+
+echo $OUTPUT->header();
+echo $OUTPUT->heading(get_string('pluginname', 'report_kentplayer'));
+
+$baseurl = new moodle_url('/report/kentplayer/index.php', array('page' => $page, 'perpage' => $perpage, 'role' => $role));
+
+// Allow restriction by role.
+echo html_writer::select(array(
+    0 => "All",
+    $ar->id => "Academic",
+    $nar->id => "Non-Academic"
+), 'role', $role);
 
 echo html_writer::table($table);
 
-$baseurl = new moodle_url('/report/kentplayer/index.php', array('page' => $page, 'perpage' => $perpage, 'role' => $role));
 $count = $DB->count_records_select('role_assignments', 'roleid ' . $wheresql, $params);
 echo $OUTPUT->paging_bar($count, $page, $perpage, $baseurl);
+
+$link = new \moodle_url($baseurl);
+$link->param('perpage', 999999);
+$link->param('format', 'csv');
+$link = \html_writer::tag('a', 'Download as CSV', array(
+    'href' => $link
+));
+echo '<p>'.$link.'</p>';
 
 echo $OUTPUT->footer();
