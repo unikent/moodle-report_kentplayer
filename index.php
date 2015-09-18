@@ -39,24 +39,24 @@ $PAGE->requires->js_init_call('M.report_kentplayer.init', array(), false, array(
     'fullpath' => '/report/kentplayer/module.js'
 ));
 
-$ar = \block_panopto\util::get_role('panopto_academic');
-$nar = \block_panopto\util::get_role('panopto_non_academic');
-
 $wheresql = '';
 $params = array();
 
-if ($role == $ar->id || $role == $nar->id) {
+if ($role == \block_panopto\eula::VERSION_ACADEMIC || $role == \block_panopto\eula::VERSION_NON_ACADEMIC) {
     $wheresql = '= :roleid';
     $params['roleid'] = $role;
 } else {
-    list($wheresql, $params) = $DB->get_in_or_equal(array($ar->id, $nar->id), SQL_PARAMS_NAMED, 'roleid');
+    list($wheresql, $params) = $DB->get_in_or_equal(array(
+        \block_panopto\eula::VERSION_ACADEMIC,
+        \block_panopto\eula::VERSION_NON_ACADEMIC
+    ), SQL_PARAMS_NAMED, 'roleid');
 }
 
 $sql = <<<SQL
-    SELECT u.id, u.username, u.firstname, u.lastname, ra.roleid
-    FROM {role_assignments} ra
-    INNER JOIN {user} u ON u.id=ra.userid
-    WHERE roleid $wheresql
+    SELECT u.id, u.username, u.firstname, u.lastname, eula.version
+    FROM {block_panopto_eula} eula
+    INNER JOIN {user} u ON u.id=eula.userid
+    WHERE version $wheresql
     GROUP BY u.id
 SQL;
 
@@ -88,7 +88,7 @@ foreach ($data as $datum) {
         $user,
         $datum->firstname,
         $datum->lastname,
-        $datum->roleid == $ar->id ? 'Academic' : 'Non-Academic'
+        $datum->roleid == \block_panopto\eula::VERSION_ACADEMIC ? 'Academic' : 'Non-Academic'
     );
     $table->data[] = $row;
 
@@ -110,13 +110,13 @@ $baseurl = new moodle_url('/report/kentplayer/index.php', array('page' => $page,
 // Allow restriction by role.
 echo html_writer::select(array(
     0 => "All",
-    $ar->id => "Academic",
-    $nar->id => "Non-Academic"
+    \block_panopto\eula::VERSION_ACADEMIC => "Academic",
+    \block_panopto\eula::VERSION_NON_ACADEMIC => "Non-Academic"
 ), 'role', $role);
 
 echo html_writer::table($table);
 
-$count = $DB->count_records_select('role_assignments', 'roleid ' . $wheresql, $params);
+$count = $DB->count_records_select('block_panopto_eula', 'version ' . $wheresql, $params);
 echo $OUTPUT->paging_bar($count, $page, $perpage, $baseurl);
 
 $link = new \moodle_url($baseurl);
