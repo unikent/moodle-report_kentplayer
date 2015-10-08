@@ -42,21 +42,21 @@ $PAGE->requires->js_init_call('M.report_kentplayer.init', array(), false, array(
 $wheresql = '';
 $params = array();
 
-if ($role == \block_panopto\eula::VERSION_ACADEMIC || $role == \block_panopto\eula::VERSION_NON_ACADEMIC) {
-    $wheresql = '= :roleid';
-    $params['roleid'] = $role;
+if ($version == \block_panopto\eula::VERSION_ACADEMIC || $version == \block_panopto\eula::VERSION_NON_ACADEMIC) {
+    $wheresql = '= :version';
+    $params['version'] = $version;
 } else {
     list($wheresql, $params) = $DB->get_in_or_equal(array(
         \block_panopto\eula::VERSION_ACADEMIC,
         \block_panopto\eula::VERSION_NON_ACADEMIC
-    ), SQL_PARAMS_NAMED, 'roleid');
+    ), SQL_PARAMS_NAMED, 'version');
 }
 
 $sql = <<<SQL
     SELECT u.id, u.username, u.firstname, u.lastname, eula.version
     FROM {block_panopto_eula} eula
-    INNER JOIN {user} u ON u.id=eula.userid
-    WHERE version $wheresql
+    INNER JOIN {user} u ON u.id = eula.userid
+    WHERE eula.version $wheresql
     GROUP BY u.id
 SQL;
 
@@ -65,7 +65,7 @@ $data = $DB->get_records_sql($sql, $params, $page * $perpage, $perpage);
 // Setup the table.
 $table = new html_table();
 $table->head  = array("Username", "First name", "Last Name", "Role");
-$table->colclasses = array('mdl-left username', 'mdl-left firstname', 'mdl-left lastname', 'mdl-left role');
+$table->colclasses = array('mdl-left username', 'mdl-left firstname', 'mdl-left lastname', 'mdl-left version');
 $table->attributes = array('class' => 'admintable kentplayerreport generaltable');
 $table->id = 'kentplayerreporttable';
 $table->data  = array();
@@ -88,7 +88,7 @@ foreach ($data as $datum) {
         $user,
         $datum->firstname,
         $datum->lastname,
-        $datum->roleid == \block_panopto\eula::VERSION_ACADEMIC ? 'Academic' : 'Non-Academic'
+        $datum->version == \block_panopto\eula::VERSION_ACADEMIC ? 'Academic' : 'Non-Academic'
     );
     $table->data[] = $row;
 
